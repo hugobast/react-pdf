@@ -241,10 +241,6 @@ const splitPage = (
   const contentArea = getContentArea(page);
   const dynamicPage = resolveDynamicPage({ pageNumber }, page, fontStore, yoga);
   const height = page.style.height;
-  const skipRelayout = page.props && 'skipRelayout' in page.props
-    ? (page.props as { skipRelayout?: boolean }).skipRelayout === true
-    : false;
-
   const [currentChilds, nextChilds] = splitNodes(
     wrapArea,
     contentArea,
@@ -272,9 +268,9 @@ const splitPage = (
     children: nextChilds,
   });
 
-  const nextPage = skipRelayout
-    ? (rawNextPage as SafePageNode)
-    : relayout(rawNextPage);
+  const nextPage = shouldResolveDynamicNodes(rawNextPage)
+    ? relayout(rawNextPage)
+    : (rawNextPage as SafePageNode);
 
   return [currentPage, nextPage];
 };

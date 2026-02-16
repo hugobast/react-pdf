@@ -92,12 +92,6 @@ declare namespace ReactPDF {
     orientation?: Orientation;
     dpi?: number;
     bookmark?: Bookmark;
-    /**
-     * Skip Yoga relayout on continuation pages during pagination.
-     * Provides significant speedup for pages with many children at the cost
-     * of less precise layout on continuation pages.
-     */
-    skipRelayout?: boolean;
   }
 
   /**

@@ -2703,9 +2703,6 @@ const splitPage = (page, pageNumber, fontStore, yoga) => {
     const contentArea = getContentArea(page);
     const dynamicPage = resolveDynamicPage({ pageNumber }, page, fontStore, yoga);
     const height = page.style.height;
-    const skipRelayout = page.props && 'skipRelayout' in page.props
-        ? page.props.skipRelayout === true
-        : false;
     const [currentChilds, nextChilds] = splitNodes(wrapArea, contentArea, dynamicPage.children);
     const relayout = (node) => 
     // @ts-expect-error rework pagination
@@ -2721,9 +2718,9 @@ const splitPage = (page, pageNumber, fontStore, yoga) => {
         box: nextBox,
         children: nextChilds,
     });
-    const nextPage = skipRelayout
-        ? rawNextPage
-        : relayout(rawNextPage);
+    const nextPage = shouldResolveDynamicNodes(rawNextPage)
+        ? relayout(rawNextPage)
+        : rawNextPage;
     return [currentPage, nextPage];
 };
 const resolvePageIndices = (fontStore, yoga, page, pageNumber, pages) => {

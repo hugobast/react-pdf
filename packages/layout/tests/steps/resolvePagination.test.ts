@@ -461,7 +461,7 @@ describe('pagination step', () => {
   });
 });
 
-describe('pagination step with skipRelayout', () => {
+describe('pagination step — fast path (skip relayout for static pages)', () => {
   test('should produce correct page count for vertical layout', async () => {
     const yoga = await loadYoga();
 
@@ -472,7 +472,7 @@ describe('pagination step with skipRelayout', () => {
       children: [
         {
           type: 'PAGE',
-          props: { skipRelayout: true },
+          props: {},
           style: {
             width: 5,
             height: 60,
@@ -509,7 +509,7 @@ describe('pagination step with skipRelayout', () => {
       children: [
         {
           type: 'PAGE',
-          props: { skipRelayout: true },
+          props: {},
           style: {
             height: 400,
           },
@@ -547,7 +547,7 @@ describe('pagination step with skipRelayout', () => {
       children: [
         {
           type: 'PAGE',
-          props: { skipRelayout: true },
+          props: {},
           style: {
             width: 5,
             height: 60,
@@ -591,7 +591,7 @@ describe('pagination step with skipRelayout', () => {
             width: 612,
             height: 792,
           },
-          props: { wrap: true, skipRelayout: true },
+          props: { wrap: true },
           children: [
             {
               type: 'VIEW' as const,
@@ -628,5 +628,49 @@ describe('pagination step with skipRelayout', () => {
 
     // If calcLayout returns then we did not hit an infinite loop
     expect(true).toBe(true);
+  });
+
+  test('should trigger relayout when page contains dynamic render props', async () => {
+    const yoga = await loadYoga();
+
+    const layout = calcLayout({
+      type: 'DOCUMENT',
+      yoga,
+      props: {},
+      children: [
+        {
+          type: 'PAGE',
+          props: {},
+          style: {
+            width: 100,
+            height: 60,
+          },
+          children: [
+            {
+              type: 'VIEW',
+              style: { height: 50 },
+              props: {},
+              children: [],
+            },
+            {
+              type: 'VIEW',
+              style: { height: 50 },
+              props: {
+                render: () => null,
+              },
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Content overflows (50+50=100 > 60), so we get 2 pages
+    expect(layout.children.length).toBe(2);
+
+    // The second page contains the dynamic view — relayout should have run
+    // so Yoga resolves dimensions properly.
+    const page2View = layout.children[1].children![0];
+    expect(page2View.box!.height).toBeGreaterThan(0);
   });
 });
