@@ -157,6 +157,22 @@ const splitView = (node: SafeNode, height: number, contentArea: number) => {
     node,
   );
 
+  // Compute height for nextNode from its children so that when relayout is
+  // skipped (skipRelayout fast path) the page has a correct height and does
+  // not trigger infinite pagination. When relayout runs (default path),
+  // Yoga overwrites this value — so it's a harmless no-op.
+  if (nextNode && nextChildren.length > 0) {
+    const paddingBottom = node.style?.paddingBottom || 0;
+    let maxChildEnd = 0;
+    for (const c of nextChildren) {
+      const end = (c.box?.top || 0) + (c.box?.height || 0);
+      if (end > maxChildEnd) maxChildEnd = end;
+    }
+    nextNode.box = Object.assign({}, nextNode.box, {
+      height: maxChildEnd + paddingBottom,
+    });
+  }
+
   return [
     assingChildren(currentChilds, currentNode),
     assingChildren(nextChildren, nextNode),
@@ -225,6 +241,9 @@ const splitPage = (
   const contentArea = getContentArea(page);
   const dynamicPage = resolveDynamicPage({ pageNumber }, page, fontStore, yoga);
   const height = page.style.height;
+  const skipRelayout = page.props && 'skipRelayout' in page.props
+    ? (page.props as { skipRelayout?: boolean }).skipRelayout === true
+    : false;
 
   const [currentChilds, nextChilds] = splitNodes(
     wrapArea,
@@ -247,13 +266,15 @@ const splitPage = (
   const nextBox = omit('height', page.box);
   const nextProps = omit('bookmark', page.props);
 
-  const nextPage = relayout(
-    Object.assign({}, page, {
-      props: nextProps,
-      box: nextBox,
-      children: nextChilds,
-    }),
-  );
+  const rawNextPage = Object.assign({}, page, {
+    props: nextProps,
+    box: nextBox,
+    children: nextChilds,
+  });
+
+  const nextPage = skipRelayout
+    ? (rawNextPage as SafePageNode)
+    : relayout(rawNextPage);
 
   return [currentPage, nextPage];
 };

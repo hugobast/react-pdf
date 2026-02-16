@@ -27,6 +27,7 @@ const splitNode = (node: SafeNode, height: number) => {
   });
 
   current.style.height = height - nodeTop;
+  current.box.height = height - nodeTop;
 
   const nextHeight = hasFixedHeight(node)
     ? node.box.height - (height - nodeTop)
@@ -54,6 +55,7 @@ const splitNode = (node: SafeNode, height: number) => {
 
   if (nextHeight) {
     next.style.height = nextHeight;
+    next.box.height = nextHeight;
   }
 
   return [current, next];

@@ -460,3 +460,173 @@ describe('pagination step', () => {
     expect(subChapter3.props!.bookmark).toEqual(bookmarkSubChapter3);
   });
 });
+
+describe('pagination step with skipRelayout', () => {
+  test('should produce correct page count for vertical layout', async () => {
+    const yoga = await loadYoga();
+
+    const layout = calcLayout({
+      type: 'DOCUMENT',
+      yoga,
+      props: {},
+      children: [
+        {
+          type: 'PAGE',
+          props: { skipRelayout: true },
+          style: {
+            width: 5,
+            height: 60,
+          },
+          children: [
+            {
+              type: 'VIEW',
+              style: { height: 130 },
+              props: {},
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    // 130 / 60 = 3 pages (60 + 60 + 10)
+    expect(layout.children.length).toBe(3);
+
+    const view1 = layout.children[0].children![0];
+    const view3 = layout.children[2].children![0];
+
+    expect(view1.box!.height).toBe(60);
+    expect(view3.box!.height).toBe(10);
+  });
+
+  test('should not infinitely loop when splitting pages', async () => {
+    const yoga = await loadYoga();
+
+    calcLayout({
+      type: 'DOCUMENT',
+      yoga,
+      props: {},
+      children: [
+        {
+          type: 'PAGE',
+          props: { skipRelayout: true },
+          style: {
+            height: 400,
+          },
+          children: [
+            {
+              type: 'VIEW',
+              style: { height: 401 },
+              props: {},
+              children: [
+                {
+                  type: 'VIEW',
+                  style: {
+                    height: 400,
+                  },
+                  props: { wrap: false, break: true },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    // If calcLayout returns then we did not hit an infinite loop
+    expect(true).toBe(true);
+  });
+
+  test('should handle fixed-height split nodes', async () => {
+    const yoga = await loadYoga();
+
+    const layout = calcLayout({
+      type: 'DOCUMENT',
+      yoga,
+      props: {},
+      children: [
+        {
+          type: 'PAGE',
+          props: { skipRelayout: true },
+          style: {
+            width: 5,
+            height: 60,
+          },
+          children: [
+            {
+              type: 'VIEW',
+              style: { height: 130 },
+              props: {},
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(layout.children.length).toBe(3);
+  });
+
+  test('should take padding into account when splitting pages', async () => {
+    const yoga = await loadYoga();
+
+    const root = {
+      type: 'DOCUMENT' as const,
+      yoga,
+      props: {},
+      style: {},
+      children: [
+        {
+          type: 'PAGE' as const,
+          box: {
+            width: 612,
+            height: 792,
+            top: 0,
+            left: 0,
+            right: 612,
+            bottom: 792,
+          },
+          style: {
+            paddingTop: 30,
+            width: 612,
+            height: 792,
+          },
+          props: { wrap: true, skipRelayout: true },
+          children: [
+            {
+              type: 'VIEW' as const,
+              box: {
+                width: 612,
+                height: 761,
+                top: 0,
+                left: 0,
+                right: 612,
+                bottom: 761,
+              },
+              style: { height: 761, marginBottom: 24 },
+              props: { wrap: true, break: false },
+            },
+            {
+              type: 'VIEW' as const,
+              box: {
+                width: 612,
+                height: 80,
+                top: 761,
+                left: 0,
+                right: 612,
+                bottom: 841,
+              },
+              style: { height: 80 },
+              props: { wrap: true, break: false },
+            },
+          ],
+        },
+      ],
+    };
+
+    calcLayout(root);
+
+    // If calcLayout returns then we did not hit an infinite loop
+    expect(true).toBe(true);
+  });
+});
