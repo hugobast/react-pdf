@@ -443,13 +443,22 @@ const resolveDynamicPage = (
   return page;
 };
 
+// Synthesized next-page geometry (no yoga relayout) carries a small residual
+// error from text-split stub heights. Reserve a safety margin on synthesized
+// pages so boundary ties resolve toward pushing content to the next page —
+// matching what a real relayout would decide — instead of keeping lines that
+// then paint past the wrap boundary and clip at the physical page edge.
+const SYNTHESIZED_WRAP_MARGIN = 4;
+
 const splitPage = (
   page: SafePageNode,
   pageNumber: number,
   fontStore: FontStore,
   yoga: YogaInstance,
+  isSynthesized = false,
 ): SafePageNode[] => {
-  const wrapArea = getWrapArea(page);
+  const wrapArea =
+    getWrapArea(page) - (isSynthesized ? SYNTHESIZED_WRAP_MARGIN : 0);
   const contentArea = getContentArea(page);
   const dynamicPage = resolveDynamicPage({ pageNumber }, page, fontStore, yoga);
   const height = page.style.height;
@@ -538,6 +547,7 @@ const paginate = (
       pageNumber + pages.length,
       fontStore,
       yoga,
+      true,
     );
 
     pages.push(splittedPage[0]);
