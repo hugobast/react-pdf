@@ -6,6 +6,7 @@ import isFixed from '../node/isFixed';
 import splitText from '../text/splitText';
 import splitNode from '../node/splitNode';
 import canNodeWrap from '../node/getWrap';
+import getPadding from '../node/getPadding';
 import getWrapArea from '../page/getWrapArea';
 import getContentArea from '../page/getContentArea';
 import createInstances from '../node/createInstances';
@@ -102,6 +103,8 @@ const splitNodes = (
   contentArea: number,
   nodes: SafeNode[],
   isRowLayout = false,
+  rowGap = 0,
+  initialTop = 0,
 ) => {
   const currentChildren: SafeNode[] = [];
   const nextChildren: SafeNode[] = [];
@@ -122,6 +125,7 @@ const splitNodes = (
   // the last non-fixed sibling already pushed to nextChildren.
   let cumFixedHeight = 0;
   let cumNonFixedNextHeight = 0;
+  let placedFlowCount = 0;
 
   // Returns `node` cloned with `box.top` set to its expected position on the
   // next page. Mutates the running cursor — must only be called when pushing to
@@ -130,14 +134,24 @@ const splitNodes = (
   // In a flex:row container children share the same top (they are side-by-side,
   // not stacked). The cumulative column approach must not be applied there —
   // preserve box.top as-is, since splitNode already resets next-half tops to 0.
+  //
+  // Yoga inserts the parent's rowGap between consecutive flow children in a
+  // column layout; mirror it or synthesized tops under-count by gap × index,
+  // over-filling the page (the relayouted page then flex-shrinks its content).
   const placeOnNextPage = (node: SafeNode): SafeNode => {
     if (isRowLayout) {
       return Object.assign({}, node, {
         box: Object.assign({}, node.box, { top: node.box?.top || 0 }),
       });
     }
+    if (placedFlowCount > 0) cumNonFixedNextHeight += rowGap;
+    placedFlowCount += 1;
     const marginTop = node.box?.marginTop || 0;
-    const newTop = cumFixedHeight + cumNonFixedNextHeight + marginTop;
+    // Yoga places the first flow child at the parent's paddingTop; a fixed
+    // sibling's bottom edge already includes it (box.top is absolute), so take
+    // the max rather than summing to avoid double-counting.
+    const newTop =
+      Math.max(cumFixedHeight, initialTop) + cumNonFixedNextHeight + marginTop;
     cumNonFixedNextHeight += getOutsetHeight(node);
     return Object.assign({}, node, {
       box: Object.assign({}, node.box, { top: newTop }),
@@ -259,13 +273,24 @@ const splitNodes = (
   return [currentChildren, nextChildren];
 };
 
+const getRowGap = (node: SafeNode): number => {
+  const gap = (node.style as { rowGap?: number | string } | undefined)?.rowGap;
+  return typeof gap === 'number' ? gap : 0;
+};
+
 const splitChildren = (height: number, contentArea: number, node: SafeNode) => {
   const children = node.children || [];
   const availableHeight = height - getTop(node);
   const fd = (node.style as { flexDirection?: string } | undefined)
     ?.flexDirection;
   const isRowLayout = fd === 'row' || fd === 'row-reverse';
-  return splitNodes(availableHeight, contentArea, children, isRowLayout);
+  return splitNodes(
+    availableHeight,
+    contentArea,
+    children,
+    isRowLayout,
+    getRowGap(node),
+  );
 };
 
 // Compute the height that yoga would assign to `node`'s next-page half given
@@ -286,6 +311,7 @@ const splitChildren = (height: number, contentArea: number, node: SafeNode) => {
 const computeActualNextDimensions = (
   nextChildren: SafeNode[],
   parent: SafeNode,
+  rowGap = 0,
 ): { actualH: number; updatedChildren: SafeNode[] } => {
   // Use style-based padding: splitNode zeroes paddingTop in style for the
   // next-half, so parent.style.paddingTop reflects the real rendered value (0).
@@ -323,8 +349,13 @@ const computeActualNextDimensions = (
     return { actualH, updatedChildren };
   }
 
-  // flex:column (default): sum outset heights of flow children.
-  const actualH = pt + flow.reduce((s, c) => s + getOutsetHeight(c), 0) + pb;
+  // flex:column (default): sum outset heights of flow children, plus the
+  // parent's rowGap between each consecutive pair.
+  const actualH =
+    pt +
+    flow.reduce((s, c) => s + getOutsetHeight(c), 0) +
+    rowGap * (flow.length - 1) +
+    pb;
   return { actualH, updatedChildren: nextChildren };
 };
 
@@ -346,6 +377,7 @@ const splitView = (node: SafeNode, height: number, contentArea: number) => {
     const { actualH, updatedChildren } = computeActualNextDimensions(
       nextChildren,
       nextNode, // next-half: style.paddingTop=0, style.paddingBottom=original
+      getRowGap(nextNode),
     );
     const next = assingChildren(
       updatedChildren,
@@ -422,10 +454,14 @@ const splitPage = (
   const dynamicPage = resolveDynamicPage({ pageNumber }, page, fontStore, yoga);
   const height = page.style.height;
 
+  const pagePaddingTop = (getPadding(page).paddingTop as number) || 0;
   const [currentChilds, nextChilds] = splitNodes(
     wrapArea,
     contentArea,
     dynamicPage.children,
+    false,
+    getRowGap(page),
+    pagePaddingTop,
   );
 
   const relayout = (node: SafePageNode): SafePageNode =>
