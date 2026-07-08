@@ -141,9 +141,12 @@ describe('pagination step', () => {
     const view2 = layout.children[1].children![0];
     const view3 = layout.children[2].children![0];
 
+    // First page has exact yoga geometry (no wrap margin); subsequent pages
+    // are synthesized and reserve SYNTHESIZED_WRAP_MARGIN (4), so continuation
+    // chunks split 4 earlier: 60, 56, 14 instead of upstream's 60, 60, 10.
     expect(view1.box!.height).toBe(60);
-    expect(view2.box!.height).toBe(60);
-    expect(view3.box!.height).toBe(10);
+    expect(view2.box!.height).toBe(56);
+    expect(view3.box!.height).toBe(14);
   });
 
   test('should not wrap page with false wrap prop', async () => {
@@ -650,19 +653,22 @@ describe('pagination step', () => {
       ],
     });
 
-    // 50 children × 20 height = 1000 total, page height 100
-    // Should produce 10 pages
-    expect(layout.children.length).toBe(10);
+    // 50 children × 20 height = 1000 total, page height 100.
+    // Upstream packs exactly 5 per page (10 pages). This fork reserves
+    // SYNTHESIZED_WRAP_MARGIN on synthesized pages, so fixed-height children
+    // split into chunks at the reduced boundary and the run costs one extra
+    // page. Assert the invariants instead of exact geometry: no content lost,
+    // nothing paints past the page.
+    expect(layout.children.length).toBe(11);
 
-    // Each page should have 5 children (100 / 20 = 5)
+    let totalHeight = 0;
     for (const page of layout.children) {
-      expect(page.children!.length).toBe(5);
+      for (const child of page.children!) {
+        totalHeight += child.box!.height;
+        expect(child.box!.top + child.box!.height).toBeLessThanOrEqual(100);
+      }
     }
-
-    // Last page's last child should have correct position
-    const lastPage = layout.children[9];
-    const lastChild = lastPage.children![4];
-    expect(lastChild.box!.height).toBe(20);
+    expect(totalHeight).toBe(1000);
   });
 
   test('should split flex-grow children across pages', async () => {
